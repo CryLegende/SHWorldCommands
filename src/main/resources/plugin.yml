@@ -1,0 +1,16 @@
+name: SHWorldCommands
+version: '${project.version}'
+main: org.Cry_Legende.sHWorldCommands.SHWorldCommands
+api-version: '1.20'
+author: Cry_Legende
+
+commands:
+  shwc:
+    description: Stocke ou exécute immédiatement une commande pour un joueur selon son monde
+    usage: /shwc <player> <command>
+    permission: shworldcommands.use
+
+permissions:
+  shworldcommands.use:
+    description: Permet d’utiliser la commande /shwc
+    default: op

@@ -1,0 +1,33 @@
+# Mondes où les commandes en attente seront exécutées.
+whitelisted-worlds:
+  - "SuperiorWorld"
+
+# Notification envoyée au joueur lorsqu'il reçoit une commande dans un monde non autorisé.
+# Vous pouvez laisser n'importe quel champ vide (ex: title: "") pour ne pas l'afficher.
+notification:
+  # Durées pour l'affichage du titre (en secondes).
+  title-timing:
+    fade-in: 0  # Temps d'apparition
+    stay: 3     # Temps de maintien à l'écran
+    fade-out: 1 # Temps de disparition
+    
+  # Le titre principal affiché au centre de l'écran.
+  title: "&6⌛ &eNouvelle récompense &6⌛"
+  
+  # Le sous-titre, affiché sous le titre principal.
+  subtitle: "&fRetourner sur votre île pour la récupérer"
+  
+  # La barre d'action, affichée juste au-dessus de la barre de raccourcis.
+  actionbar: "&6⌛ &eNouvelle récompense &6⌛ &7| &fRetourner sur votre île pour la récupérer"
+  
+  # Le message dans le chat. Vous pouvez toujours utiliser plusieurs lignes.
+  # Le formatage avec |- permet de conserver les sauts de ligne.
+  message: |-
+    &r
+    &7&l« &e&k!!!&r &6&lNouvelle Récompense en attente &e&k!!!&r &8&l»
+    &r
+    &r &6Vous avez reçu une récompense,
+    &r    &6mais êtes dans un monde blacklisté.
+    &r 
+    &8&o(( &e&oRetournez sur votre île pour la recevoir ! &8&o))
+    &r
