@@ -17,6 +17,7 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerChangedWorldEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.io.File;
@@ -73,6 +74,12 @@ public class SHWorldCommands extends JavaPlugin
     @EventHandler
     public void onJoin(PlayerJoinEvent event) {
         Bukkit.getScheduler().runTaskLater(this, () -> checkAndExecute(event.getPlayer()), 20L);
+    }
+
+    // Vide le cooldown de notification : sans ça la map garde une entrée par joueur pour toujours
+    @EventHandler
+    public void onQuit(PlayerQuitEvent event) {
+        lastMessageTime.remove(event.getPlayer().getUniqueId());
     }
 
     private void checkAndExecute(Player player) {
