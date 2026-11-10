@@ -1,0 +1,9 @@
+# Messages de SHWorldCommands. Codes couleur avec '&'.
+# Les notifications de récompense en attente (titre, sous-titre, barre d'action, chat) sont dans config.yml.
+
+# /shwc sans la permission shworldcommands.use
+pas-de-permission: "&cVous n'avez pas la permission."
+# /shwc sans joueur ou sans commande
+usage: "&cUsage: /shwc <player> <command>"
+# Joueur connecté nulle part (avec SHNetwork : sur aucun serveur du réseau)
+joueur-introuvable: "&cJoueur introuvable ou déconnecté."

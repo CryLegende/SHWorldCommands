@@ -1,3 +1,18 @@
+# SHWorldCommands
+#
+# Exécute une commande pour un joueur seulement quand il est dans un monde autorisé (whitelisted-worlds). Ailleurs,
+# la commande attend et part dès qu'il entre dans un de ces mondes ou se reconnecte dedans. Sert aux récompenses à
+# donner sur l'île (objets, clés...), souvent via SHQueueCommands : qc queue <joueur> shwc <joueur> <commande>.
+#
+# Commande :
+#   /shwc <joueur> <commande>   Exécute la commande en console tout de suite si le joueur est dans un monde autorisé,
+#                               sinon la met en attente et le prévient (notification). %player% = pseudo du joueur.
+#
+# Permission :
+#   shworldcommands.use   Utiliser /shwc (op par défaut).
+#
+# Les textes de /shwc sont dans messages.yml.
+
 # Mondes où les commandes en attente seront exécutées.
 whitelisted-worlds:
   - "SuperiorWorld"
@@ -31,3 +46,19 @@ notification:
     &r 
     &8&o(( &e&oRetournez sur votre île pour la recevoir ! &8&o))
     &r
+
+# Mode réseau : avec SHNetwork, une seule liste d'attente pour tous les serveurs, en MariaDB (table shwc_pending).
+# Joueur connecté sur un autre serveur : /shwc y est relancée. Commande en attente : réclamée par le serveur où le joueur
+# entre dans un monde autorisé (une seule fois pour tout le réseau). Un monde qui n'existe que sur un serveur ne
+# déclenche donc que sur celui-là. Au premier démarrage en mode réseau, commands.yml de ce serveur est repris une fois
+# pour tout le réseau ; chaque serveur renomme ensuite le sien en commands.yml.avant-reseau.
+# Si la base est injoignable, le plugin se désactive sur ce serveur (jamais de retour au fichier local).
+# Sans SHNetwork, cette section ne sert pas.
+reseau:
+  actif: true
+  base-de-donnees:
+    url: "jdbc:mariadb://127.0.0.1:3306/bo_net"
+    utilisateur: shworldcommands
+    mot-de-passe: CHANGE_ME
+    # Délai maximal de connexion et de réponse de la base, en millisecondes
+    delai-ms: 3000

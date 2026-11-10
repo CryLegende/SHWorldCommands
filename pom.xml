@@ -81,5 +81,25 @@
             <version>26.3.build.209-stable</version>
             <scope>provided</scope>
         </dependency>
+        <!-- Mode réseau : SHNetwork est facultatif, seule la classe ShNetworkBus s'en sert -->
+        <dependency>
+            <groupId>org.Cry_Legende</groupId>
+            <artifactId>SHNetwork</artifactId>
+            <version>1.0</version>
+            <scope>provided</scope>
+        </dependency>
+        <!-- Chargés par Paper (libraries: de plugin.yml) -->
+        <dependency>
+            <groupId>com.zaxxer</groupId>
+            <artifactId>HikariCP</artifactId>
+            <version>5.1.0</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.mariadb.jdbc</groupId>
+            <artifactId>mariadb-java-client</artifactId>
+            <version>3.4.1</version>
+            <scope>provided</scope>
+        </dependency>
     </dependencies>
 </project>

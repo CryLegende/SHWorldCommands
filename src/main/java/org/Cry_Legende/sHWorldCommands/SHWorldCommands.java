@@ -1,5 +1,7 @@
 package org.Cry_Legende.sHWorldCommands;
 
+import org.Cry_Legende.sHWorldCommands.network.NetBus;
+import org.Cry_Legende.sHWorldCommands.network.ShNetworkBus;
 import net.md_5.bungee.api.ChatMessageType;
 import net.md_5.bungee.api.chat.TextComponent;
 import org.bukkit.Bukkit;
@@ -22,7 +24,11 @@ import org.bukkit.plugin.java.JavaPlugin;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
 import java.util.*;
+import java.util.logging.Level;
 
 public class SHWorldCommands extends JavaPlugin
     implements Listener, CommandExecutor, TabCompleter {
@@ -32,6 +38,9 @@ public class SHWorldCommands extends JavaPlugin
     private FileConfiguration commandsData;
     private final Map<UUID, Long> lastMessageTime = new HashMap<>();
     private final Object commandsLock = new Object();
+    private FileConfiguration messages;
+    // Mode réseau (SHNetwork présent) : commandes en attente dans une base commune ; null sur un serveur seul
+    private NetworkPending network;
 
     @Override
     public void onEnable() {
@@ -48,6 +57,16 @@ public class SHWorldCommands extends JavaPlugin
             }
         }
         commandsData = YamlConfiguration.loadConfiguration(commandsFile);
+        loadMessages();
+
+        if (getConfig().getBoolean("reseau.actif", true) && getServer().getPluginManager().isPluginEnabled("SHNetwork")) {
+            // Sur le réseau, jamais de retour à commands.yml : sur un serveur copié d'un autre, il contient des
+            // commandes déjà données ailleurs.
+            if (!enableNetwork()) {
+                getServer().getPluginManager().disablePlugin(this);
+                return;
+            }
+        }
 
         getServer().getPluginManager().registerEvents(this, this);
 
@@ -62,8 +81,95 @@ public class SHWorldCommands extends JavaPlugin
 
     @Override
     public void onDisable() {
+        if (network != null) {
+            network.disable();
+            network = null;
+            getLogger().info("SHWorldCommands désactivé.");
+            return;
+        }
         saveCommandsData();
         getLogger().info("SHWorldCommands désactivé.");
+    }
+
+    /** messages.yml, avec ceux du jar par défaut pour les clés absentes du fichier du serveur. */
+    private void loadMessages() {
+        File file = new File(getDataFolder(), "messages.yml");
+        if (!file.exists()) {
+            saveResource("messages.yml", false);
+        }
+        messages = YamlConfiguration.loadConfiguration(file);
+        try (InputStream bundled = getResource("messages.yml")) {
+            if (bundled != null) {
+                messages.setDefaults(YamlConfiguration.loadConfiguration(new InputStreamReader(bundled, StandardCharsets.UTF_8)));
+            }
+        } catch (IOException ignored) {
+            // messages du fichier seuls
+        }
+    }
+
+    private String message(String key) {
+        return ChatColor.translateAlternateColorCodes('&', messages.getString(key, ""));
+    }
+
+    /**
+     * Mode réseau : commandes en attente dans MariaDB (table shwc_pending), communes à tous les serveurs. Les commandes
+     * de commands.yml y sont reprises une seule fois pour tout le réseau (premier serveur démarré), puis chaque serveur
+     * met son fichier de côté.
+     */
+    private boolean enableNetwork() {
+        PendingStore store = null;
+        try {
+            NetBus bus = ShNetworkBus.open();
+            store = new PendingStore(getConfig().getString("reseau.base-de-donnees.url", ""),
+                getConfig().getString("reseau.base-de-donnees.utilisateur", ""),
+                getConfig().getString("reseau.base-de-donnees.mot-de-passe", ""),
+                Math.max(500, getConfig().getInt("reseau.base-de-donnees.delai-ms", 3000)));
+            store.createTables();
+            Map<UUID, List<String>> pending = new LinkedHashMap<>();
+            for (String key : commandsData.getKeys(false)) {
+                try {
+                    List<String> commands = commandsData.getStringList(key);
+                    if (!commands.isEmpty()) {
+                        pending.put(UUID.fromString(key), commands);
+                    }
+                } catch (IllegalArgumentException e) {
+                    getLogger().warning("UUID invalide dans commands.yml : " + key);
+                }
+            }
+            int imported = store.importOnce(pending, bus.serverName());
+            if (imported >= 0) {
+                getLogger().info("commands.yml repris dans la base commune : " + imported + " commande(s).");
+            }
+            retireYaml();
+            commandsData = new YamlConfiguration();
+            NetworkPending pendingNetwork = new NetworkPending(this, bus, store);
+            pendingNetwork.enable();
+            this.network = pendingNetwork;
+            getLogger().info("SHNetwork détecté : commandes en attente communes à tout le réseau (MariaDB).");
+            return true;
+        } catch (Exception | LinkageError e) {
+            if (store != null) {
+                store.close();
+            }
+            getLogger().log(Level.SEVERE, "Mode réseau impossible (SHNetwork ou base injoignable) : SHWorldCommands désactivé sur ce serveur.", e);
+            return false;
+        }
+    }
+
+    /** commands.yml mis de côté une fois la base commune en place : il ne sera plus jamais relu. */
+    private void retireYaml() {
+        if (!commandsFile.isFile()) {
+            return;
+        }
+        File target = new File(commandsFile.getParentFile(), commandsFile.getName() + ".avant-reseau");
+        if (target.exists()) {
+            target = new File(commandsFile.getParentFile(), commandsFile.getName() + ".avant-reseau-" + System.currentTimeMillis());
+        }
+        if (commandsFile.renameTo(target)) {
+            getLogger().info("commands.yml mis de côté : " + target.getName());
+        } else {
+            getLogger().warning("commands.yml non renommé : à mettre de côté à la main avant tout retour sans SHNetwork.");
+        }
     }
 
     @EventHandler
@@ -83,6 +189,12 @@ public class SHWorldCommands extends JavaPlugin
     }
 
     private void checkAndExecute(Player player) {
+        if (network != null) {
+            if (player.isOnline() && isInWhitelistedWorld(player.getWorld())) {
+                network.claimAndRun(player);
+            }
+            return;
+        }
         UUID uuid = player.getUniqueId();
         List<String> cmds;
         synchronized (commandsLock) {
@@ -101,12 +213,15 @@ public class SHWorldCommands extends JavaPlugin
         }
     }
 
-    private boolean isInWhitelistedWorld(World world) {
+    boolean isInWhitelistedWorld(World world) {
         return getConfig().getStringList("whitelisted-worlds")
             .contains(world.getName());
     }
 
     private void saveCommandsData() {
+        if (network != null) {
+            return; // mode réseau : les commandes sont en base, commands.yml n'est plus écrit
+        }
         synchronized (commandsLock) {
             try {
                 commandsData.save(commandsFile);
@@ -119,29 +234,39 @@ public class SHWorldCommands extends JavaPlugin
     @Override
     public boolean onCommand(CommandSender sender, Command cmd, String label, String[] args) {
         if (!sender.hasPermission("shworldcommands.use")) {
-            sender.sendMessage(ChatColor.RED + "Vous n'avez pas la permission.");
+            sender.sendMessage(message("pas-de-permission"));
             return true;
         }
 
         if (args.length < 2) {
-            sender.sendMessage(ChatColor.RED + "Usage: /shwc <player> <command>");
+            sender.sendMessage(message("usage"));
             return true;
         }
 
+        String commandToStore = String.join(" ", Arrays.copyOfRange(args, 1, args.length));
         Player target = Bukkit.getPlayerExact(args[0]);
         if (target == null) {
-            sender.sendMessage(ChatColor.RED + "Joueur introuvable ou déconnecté.");
+            // Mode réseau : joueur connecté sur un autre serveur, /shwc y est relancée
+            if (network != null && network.forward(args[0], commandToStore)) {
+                return true;
+            }
+            sender.sendMessage(message("joueur-introuvable"));
             return true;
         }
 
         UUID uuid = target.getUniqueId();
-        String commandToStore = String.join(" ", Arrays.copyOfRange(args, 1, args.length));
 
         if (isInWhitelistedWorld(target.getWorld())) {
             Bukkit.dispatchCommand(
                 Bukkit.getConsoleSender(),
                 commandToStore.replace("%player%", target.getName())
             );
+            return true;
+        }
+
+        if (network != null) {
+            // Mode réseau : la commande attend dans la base commune, quel que soit le serveur où le joueur ira
+            network.store(target, commandToStore);
         } else {
             synchronized (commandsLock) {
                 List<String> list = commandsData.getStringList(uuid.toString());
@@ -149,12 +274,12 @@ public class SHWorldCommands extends JavaPlugin
                 commandsData.set(uuid.toString(), list);
                 saveCommandsData();
             }
+        }
 
-            long last = lastMessageTime.getOrDefault(uuid, 0L);
-            if (System.currentTimeMillis() - last >= 10_000L) { // Cooldown de 10s
-                sendBlacklistNotification(target); // Appel de la nouvelle méthode de notification
-                lastMessageTime.put(uuid, System.currentTimeMillis());
-            }
+        long last = lastMessageTime.getOrDefault(uuid, 0L);
+        if (System.currentTimeMillis() - last >= 10_000L) { // Cooldown de 10s
+            sendBlacklistNotification(target); // Appel de la nouvelle méthode de notification
+            lastMessageTime.put(uuid, System.currentTimeMillis());
         }
         return true;
     }
