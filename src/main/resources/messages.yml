@@ -1,9 +1,37 @@
-# Messages de SHWorldCommands. Codes couleur avec '&'.
+# Messages de SHWorldCommands. Codes couleur avec '&'. Une clé absente de ce fichier reprend le texte du jar.
 # Les notifications de récompense en attente (titre, sous-titre, barre d'action, chat) sont dans config.yml.
 
-# /shwc sans la permission shworldcommands.use
-pas-de-permission: "&cVous n'avez pas la permission."
-# /shwc sans joueur ou sans commande
-usage: "&cUsage: /shwc <player> <command>"
+# Sans la permission nécessaire (shworldcommands.use pour run, shworldcommands.admin.<sous-commande> pour les autres)
+pas-de-permission: "&7&l« &f&lSH &8&l» &fCommande inconnue, essayez autre chose."
+# /shworldcommands sans argument. %commands% : les sous-commandes que l'expéditeur peut utiliser.
+usage-line: "&7&l« &e&lSH &8&l» &7Utilisation : &e/shworldcommands &7<&e%commands%&7>"
+# /shworldcommands run sans joueur ou sans commande (et ancienne forme /shwc <joueur> <commande>)
+usage-run: "&7&l« &e&lSH &8&l» &7Utilisation : &e/shworldcommands run <joueur> <commande>"
+usage-clear: "&7&l« &e&lSH &8&l» &7Utilisation : &e/shworldcommands clear <joueur>"
 # Joueur connecté nulle part (avec SHNetwork : sur aucun serveur du réseau)
-joueur-introuvable: "&cJoueur introuvable ou déconnecté."
+joueur-introuvable: "&7&l« &c&lSH &8&l» &7Joueur &cintrouvable &7ou déconnecté."
+
+# /shworldcommands reload
+reload: "&7&l« &a&lSH &8&l» &7Configuration &arechargée&7. Les commandes en attente ne sont pas touchées."
+# Fichier YAML illisible : l'ancienne configuration reste en place. %file% : fichier, %line% : ligne, %error% : problème relevé.
+reload-failed: "&7&l« &c&lSH &8&l» &7Rechargement &cimpossible &7: &c%file% &7ligne &c%line%&7, %error%. Ancienne configuration conservée."
+# La section 'reseau' de config.yml a changé : elle ne se recharge pas à chaud.
+reload-network: "&7&l« &6&lSH &8&l» &7La section &6reseau &7demande un &6redémarrage&7 pour être prise en compte."
+
+# /shworldcommands list [joueur] et clear <joueur>
+# Avec SHNetwork les commandes en attente sont en base : list et clear ne les lisent pas.
+network-unavailable: "&7&l« &6&lSH &8&l» &7Indisponible en &6mode réseau &7: les commandes en attente sont dans la base commune."
+# %total% : commandes en attente, %players% : joueurs concernés
+list-header: "&7&l« &e&lSH &8&l» &e%total% &7commande(s) en attente pour &e%players% &7joueur(s) :"
+# %player% : pseudo (ou UUID si le serveur ne le connaît pas), %count% : commandes
+list-entry: "&8• &e%player% &7: &e%count% &7commande(s)"
+# %more% : joueurs non affichés
+list-more: "&8• &7... et &e%more% &7autre(s) joueur(s)."
+list-empty: "&7&l« &e&lSH &8&l» &7Aucune commande en attente."
+# %player% : pseudo demandé, %count% : commandes
+list-player-header: "&7&l« &e&lSH &8&l» &e%player% &7a &e%count% &7commande(s) en attente :"
+# %command% : commande telle qu'elle sera exécutée
+list-command: "&8• &f%command%"
+list-none-player: "&7&l« &e&lSH &8&l» &7Aucune commande en attente pour &e%player%&7."
+# %count% : commandes supprimées, %player% : pseudo
+clear-done: "&7&l« &a&lSH &8&l» &a%count% &7commande(s) en attente de &a%player% &7supprimée(s)."

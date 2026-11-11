@@ -11,12 +11,28 @@ libraries:
   - org.mariadb.jdbc:mariadb-java-client:3.4.1
 
 commands:
-  shwc:
-    description: Stocke ou exécute immédiatement une commande pour un joueur selon son monde
-    usage: /shwc <player> <command>
-    permission: shworldcommands.use
+  shworldcommands:
+    description: Exécute ou met en attente une commande pour un joueur selon son monde, et administration du plugin
+    usage: /shworldcommands run <joueur> <commande>
+    aliases: [shwc]
 
 permissions:
   shworldcommands.use:
-    description: Permet d’utiliser la commande /shwc
+    description: Exécuter ou mettre en attente une commande pour un joueur (/shworldcommands run, ancienne /shwc <joueur> <commande>)
+    default: op
+  shworldcommands.admin:
+    description: Toutes les sous-commandes d'administration de /shworldcommands (reload, list, clear)
+    default: op
+    children:
+      shworldcommands.admin.reload: true
+      shworldcommands.admin.list: true
+      shworldcommands.admin.clear: true
+  shworldcommands.admin.reload:
+    description: /shworldcommands reload (recharger config.yml et messages.yml)
+    default: op
+  shworldcommands.admin.list:
+    description: /shworldcommands list (commandes en attente)
+    default: op
+  shworldcommands.admin.clear:
+    description: /shworldcommands clear (supprimer les commandes en attente d'un joueur)
     default: op

@@ -31,13 +31,22 @@ Avec **SHNetwork** chargé et `reseau.actif: true` (par défaut), les commandes 
 
 | Commande | Alias | Description | Permission |
 |---|---|---|---|
-| `/shwc` | — | Stocke ou exécute immédiatement une commande pour un joueur selon son monde | `shworldcommands.use` |
+| `/shworldcommands run <joueur> <commande>` | `/shwc <joueur> <commande>` | Exécute la commande en console tout de suite si le joueur est dans un monde autorisé, sinon la met en attente et le prévient. `/shworldcommands <joueur> <commande>` marche aussi ; via `/shwc` le premier mot est toujours un joueur. | `shworldcommands.use` |
+| `/shworldcommands reload` | — | Recharge `config.yml` et `messages.yml` (jamais `commands.yml`). Un fichier YAML invalide laisse l'ancienne configuration en place et affiche le fichier et la ligne de l'erreur. | `shworldcommands.admin.reload` |
+| `/shworldcommands list [joueur]` | — | Commandes en attente, au total ou pour un joueur. Mode fichier seulement. | `shworldcommands.admin.list` |
+| `/shworldcommands clear <joueur>` | — | Supprime les commandes en attente d'un joueur. Mode fichier seulement. | `shworldcommands.admin.clear` |
+
+Toutes les commandes marchent en console. Avec SHNetwork, les commandes en attente sont en base : `list` et `clear` répondent qu'elles sont indisponibles en mode réseau.
 
 ## Permissions
 
 | Permission | Description | Par défaut |
 |---|---|---|
-| `shworldcommands.use` | Permet d’utiliser la commande /shwc | `op` |
+| `shworldcommands.use` | Utiliser `/shworldcommands run` et `/shwc` | `op` |
+| `shworldcommands.admin` | Toutes les sous-commandes d'administration (`reload`, `list`, `clear`) | `op` |
+| `shworldcommands.admin.reload` | `/shworldcommands reload` | `op` |
+| `shworldcommands.admin.list` | `/shworldcommands list` | `op` |
+| `shworldcommands.admin.clear` | `/shworldcommands clear` | `op` |
 
 ## Configuration
 

@@ -6,12 +6,14 @@ import net.md_5.bungee.api.ChatMessageType;
 import net.md_5.bungee.api.chat.TextComponent;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
+import org.bukkit.OfflinePlayer;
 import org.bukkit.World;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.PluginCommand;
 import org.bukkit.command.TabCompleter;
+import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
@@ -38,7 +40,13 @@ public class SHWorldCommands extends JavaPlugin
     private FileConfiguration commandsData;
     private final Map<UUID, Long> lastMessageTime = new HashMap<>();
     private final Object commandsLock = new Object();
-    private FileConfiguration messages;
+    private volatile FileConfiguration messages;
+    // Section 'reseau' lue au démarrage : un reload qui la voit changer prévient qu'un redémarrage est nécessaire
+    private Map<String, Object> startNetworkSettings = Map.of();
+    // Sous-commandes de /shworldcommands (jamais lues via l'alias shwc, qui garde l'ancienne syntaxe <joueur> <commande>)
+    private static final List<String> SUBCOMMANDS = List.of("run", "reload", "list", "clear");
+    private static final String USE = "shworldcommands.use";
+    private static final int LIST_LIMIT = 30;
     // Mode réseau (SHNetwork présent) : commandes en attente dans une base commune ; null sur un serveur seul
     private NetworkPending network;
 
@@ -58,6 +66,7 @@ public class SHWorldCommands extends JavaPlugin
         }
         commandsData = YamlConfiguration.loadConfiguration(commandsFile);
         loadMessages();
+        startNetworkSettings = networkSettings();
 
         if (getConfig().getBoolean("reseau.actif", true) && getServer().getPluginManager().isPluginEnabled("SHNetwork")) {
             // Sur le réseau, jamais de retour à commands.yml : sur un serveur copié d'un autre, il contient des
@@ -70,7 +79,7 @@ public class SHWorldCommands extends JavaPlugin
 
         getServer().getPluginManager().registerEvents(this, this);
 
-        PluginCommand pc = getCommand("shwc");
+        PluginCommand pc = getCommand("shworldcommands");
         if (pc != null) {
             pc.setExecutor(this);
             pc.setTabCompleter(this);
@@ -97,13 +106,52 @@ public class SHWorldCommands extends JavaPlugin
         if (!file.exists()) {
             saveResource("messages.yml", false);
         }
-        messages = YamlConfiguration.loadConfiguration(file);
+        YamlConfiguration loaded;
+        try {
+            loaded = ReloadException.read(file);
+        } catch (ReloadException e) {
+            getLogger().warning("messages.yml illisible, textes du jar utilisés : " + e.getMessage());
+            loaded = new YamlConfiguration();
+        }
+        applyMessages(loaded);
+    }
+
+    private void applyMessages(YamlConfiguration loaded) {
         try (InputStream bundled = getResource("messages.yml")) {
             if (bundled != null) {
-                messages.setDefaults(YamlConfiguration.loadConfiguration(new InputStreamReader(bundled, StandardCharsets.UTF_8)));
+                loaded.setDefaults(YamlConfiguration.loadConfiguration(new InputStreamReader(bundled, StandardCharsets.UTF_8)));
             }
         } catch (IOException ignored) {
             // messages du fichier seuls
+        }
+        messages = loaded;
+    }
+
+    private Map<String, Object> networkSettings() {
+        ConfigurationSection section = getConfig().getConfigurationSection("reseau");
+        return section == null ? Map.of() : section.getValues(true);
+    }
+
+    /**
+     * Relit config.yml et messages.yml. Un fichier illisible laisse tout en l'état : l'erreur (fichier, ligne,
+     * problème) est donnée à l'expéditeur et à la console. commands.yml (les commandes en attente) n'est jamais relu.
+     */
+    private void reloadFiles(CommandSender sender) {
+        YamlConfiguration loadedMessages;
+        try {
+            ReloadException.read(new File(getDataFolder(), "config.yml"));
+            loadedMessages = ReloadException.read(new File(getDataFolder(), "messages.yml"));
+        } catch (ReloadException e) {
+            getLogger().warning("Rechargement refusé, ancienne configuration conservée : " + e.getMessage());
+            sender.sendMessage(message("reload-failed")
+                .replace("%file%", e.file()).replace("%line%", e.line()).replace("%error%", e.problem()));
+            return;
+        }
+        reloadConfig();
+        applyMessages(loadedMessages);
+        sender.sendMessage(message("reload"));
+        if (!networkSettings().equals(startNetworkSettings)) {
+            sender.sendMessage(message("reload-network"));
         }
     }
 
@@ -233,13 +281,174 @@ public class SHWorldCommands extends JavaPlugin
 
     @Override
     public boolean onCommand(CommandSender sender, Command cmd, String label, String[] args) {
-        if (!sender.hasPermission("shworldcommands.use")) {
+        // Via l'alias shwc, le premier mot est toujours un joueur : l'ancienne syntaxe ne change pas
+        boolean legacyAlias = label.substring(label.lastIndexOf(':') + 1).equalsIgnoreCase("shwc");
+        String first = args.length == 0 ? "" : args[0].toLowerCase(Locale.ROOT);
+        if (!legacyAlias) {
+            if (args.length == 0) {
+                sendUsageLine(sender);
+                return true;
+            }
+            if (SUBCOMMANDS.contains(first)) {
+                subcommand(sender, first, args);
+                return true;
+            }
+        }
+        return run(sender, args);
+    }
+
+    private void subcommand(CommandSender sender, String sub, String[] args) {
+        switch (sub) {
+            case "run" -> run(sender, Arrays.copyOfRange(args, 1, args.length));
+            case "reload" -> {
+                if (sender.hasPermission("shworldcommands.admin.reload")) {
+                    reloadFiles(sender);
+                } else {
+                    sender.sendMessage(message("pas-de-permission"));
+                }
+            }
+            case "list" -> {
+                if (sender.hasPermission("shworldcommands.admin.list")) {
+                    listPending(sender, args.length > 1 ? args[1] : null);
+                } else {
+                    sender.sendMessage(message("pas-de-permission"));
+                }
+            }
+            default -> {
+                if (!sender.hasPermission("shworldcommands.admin.clear")) {
+                    sender.sendMessage(message("pas-de-permission"));
+                } else if (args.length < 2) {
+                    sender.sendMessage(message("usage-clear"));
+                } else {
+                    clearPending(sender, args[1]);
+                }
+            }
+        }
+    }
+
+    /** Sous-commandes que l'expéditeur a le droit d'utiliser. */
+    private List<String> allowedSubcommands(CommandSender sender) {
+        List<String> allowed = new ArrayList<>();
+        if (sender.hasPermission(USE)) {
+            allowed.add("run");
+        }
+        for (String sub : List.of("reload", "list", "clear")) {
+            if (sender.hasPermission("shworldcommands.admin." + sub)) {
+                allowed.add(sub);
+            }
+        }
+        return allowed;
+    }
+
+    private void sendUsageLine(CommandSender sender) {
+        List<String> allowed = allowedSubcommands(sender);
+        if (allowed.isEmpty()) {
+            sender.sendMessage(message("pas-de-permission"));
+        } else {
+            sender.sendMessage(message("usage-line").replace("%commands%", String.join("|", allowed)));
+        }
+    }
+
+    /** Joueur d'une commande en attente : en ligne, ou connu du cache du serveur (jamais de recherche réseau). */
+    private UUID resolveUuid(String name) {
+        Player online = Bukkit.getPlayerExact(name);
+        if (online != null) {
+            return online.getUniqueId();
+        }
+        OfflinePlayer cached = Bukkit.getOfflinePlayerIfCached(name);
+        return cached == null ? null : cached.getUniqueId();
+    }
+
+    private String nameOf(String uuid) {
+        try {
+            String name = Bukkit.getOfflinePlayer(UUID.fromString(uuid)).getName();
+            return name != null ? name : uuid;
+        } catch (IllegalArgumentException e) {
+            return uuid;
+        }
+    }
+
+    /** /shworldcommands list [joueur] : commandes en attente (mode fichier ; en mode réseau elles sont en base). */
+    private void listPending(CommandSender sender, String playerName) {
+        if (network != null) {
+            sender.sendMessage(message("network-unavailable"));
+            return;
+        }
+        synchronized (commandsLock) {
+            if (playerName != null) {
+                UUID uuid = resolveUuid(playerName);
+                List<String> pending = uuid == null ? List.of() : commandsData.getStringList(uuid.toString());
+                if (pending.isEmpty()) {
+                    sender.sendMessage(message("list-none-player").replace("%player%", playerName));
+                    return;
+                }
+                sender.sendMessage(message("list-player-header")
+                    .replace("%player%", playerName).replace("%count%", String.valueOf(pending.size())));
+                pending.forEach(command -> sender.sendMessage(message("list-command").replace("%command%", command)));
+                return;
+            }
+            List<String> owners = new ArrayList<>();
+            int total = 0;
+            for (String key : commandsData.getKeys(false)) {
+                int count = commandsData.getStringList(key).size();
+                if (count > 0) {
+                    owners.add(key);
+                    total += count;
+                }
+            }
+            if (owners.isEmpty()) {
+                sender.sendMessage(message("list-empty"));
+                return;
+            }
+            sender.sendMessage(message("list-header")
+                .replace("%total%", String.valueOf(total)).replace("%players%", String.valueOf(owners.size())));
+            int shown = Math.min(owners.size(), LIST_LIMIT);
+            for (int i = 0; i < shown; i++) {
+                String key = owners.get(i);
+                sender.sendMessage(message("list-entry").replace("%player%", nameOf(key))
+                    .replace("%count%", String.valueOf(commandsData.getStringList(key).size())));
+            }
+            if (owners.size() > shown) {
+                sender.sendMessage(message("list-more").replace("%more%", String.valueOf(owners.size() - shown)));
+            }
+        }
+    }
+
+    /** /shworldcommands clear <joueur> : supprime les commandes en attente d'un joueur. */
+    private void clearPending(CommandSender sender, String playerName) {
+        if (network != null) {
+            sender.sendMessage(message("network-unavailable"));
+            return;
+        }
+        UUID uuid = resolveUuid(playerName);
+        int removed = 0;
+        synchronized (commandsLock) {
+            if (uuid != null) {
+                removed = commandsData.getStringList(uuid.toString()).size();
+                if (removed > 0) {
+                    commandsData.set(uuid.toString(), null);
+                    saveCommandsData();
+                }
+            }
+        }
+        if (removed == 0) {
+            sender.sendMessage(message("list-none-player").replace("%player%", playerName));
+            return;
+        }
+        getLogger().info(sender.getName() + " a supprimé " + removed + " commande(s) en attente de " + playerName + ".");
+        sender.sendMessage(message("clear-done")
+            .replace("%count%", String.valueOf(removed)).replace("%player%", playerName));
+    }
+
+    /** /shworldcommands run <joueur> <commande>, et l'ancienne forme /shwc <joueur> <commande>. */
+    private boolean run(CommandSender sender, String[] args) {
+        if (!sender.hasPermission(USE)) {
             sender.sendMessage(message("pas-de-permission"));
             return true;
         }
 
         if (args.length < 2) {
-            sender.sendMessage(message("usage"));
+            sender.sendMessage(message("usage-run"));
             return true;
         }
 
@@ -328,6 +537,28 @@ public class SHWorldCommands extends JavaPlugin
 
     @Override
     public List<String> onTabComplete(CommandSender sender, Command cmd, String alias, String[] args) {
-        return Collections.emptyList();
+        boolean legacyAlias = alias.substring(alias.lastIndexOf(':') + 1).equalsIgnoreCase("shwc");
+        List<String> out = new ArrayList<>();
+        if (args.length == 1) {
+            String typed = args[0].toLowerCase(Locale.ROOT);
+            if (!legacyAlias) {
+                allowedSubcommands(sender).stream().filter(sub -> sub.startsWith(typed)).forEach(out::add);
+            }
+            if (sender.hasPermission(USE)) {
+                addPlayers(out, typed);
+            }
+        } else if (args.length == 2 && !legacyAlias && SUBCOMMANDS.contains(args[0].toLowerCase(Locale.ROOT))
+            && allowedSubcommands(sender).contains(args[0].toLowerCase(Locale.ROOT)) && !args[0].equalsIgnoreCase("reload")) {
+            addPlayers(out, args[1].toLowerCase(Locale.ROOT));
+        }
+        return out;
+    }
+
+    private static void addPlayers(List<String> out, String typed) {
+        for (Player online : Bukkit.getOnlinePlayers()) {
+            if (online.getName().toLowerCase(Locale.ROOT).startsWith(typed)) {
+                out.add(online.getName());
+            }
+        }
     }
 }

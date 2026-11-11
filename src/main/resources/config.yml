@@ -4,14 +4,26 @@
 # la commande attend et part dès qu'il entre dans un de ces mondes ou se reconnecte dedans. Sert aux récompenses à
 # donner sur l'île (objets, clés...), souvent via SHQueueCommands : qc queue <joueur> shwc <joueur> <commande>.
 #
-# Commande :
-#   /shwc <joueur> <commande>   Exécute la commande en console tout de suite si le joueur est dans un monde autorisé,
+# Commandes (console comprise ; l'alias /shwc garde l'ancienne syntaxe) :
+#   /shworldcommands run <joueur> <commande>   (alias /shwc <joueur> <commande>)
+#                               Exécute la commande en console tout de suite si le joueur est dans un monde autorisé,
 #                               sinon la met en attente et le prévient (notification). %player% = pseudo du joueur.
+#                               /shworldcommands <joueur> <commande> marche aussi. Via /shwc, le premier mot est
+#                               toujours un joueur.
+#   /shworldcommands reload     Recharge config.yml et messages.yml. Un fichier YAML invalide laisse l'ancienne
+#                               configuration en place et affiche le fichier et la ligne. Les commandes en attente
+#                               (commands.yml) ne sont jamais relues. La section 'reseau' demande un redémarrage.
+#   /shworldcommands list [joueur]   Commandes en attente, au total ou pour un joueur (mode fichier seulement).
+#   /shworldcommands clear <joueur>  Supprime les commandes en attente d'un joueur (mode fichier seulement).
 #
-# Permission :
-#   shworldcommands.use   Utiliser /shwc (op par défaut).
+# Permissions :
+#   shworldcommands.use           Utiliser /shworldcommands run et /shwc (op par défaut).
+#   shworldcommands.admin         Toutes les sous-commandes d'administration (op par défaut).
+#   shworldcommands.admin.reload  /shworldcommands reload (op par défaut).
+#   shworldcommands.admin.list    /shworldcommands list (op par défaut).
+#   shworldcommands.admin.clear   /shworldcommands clear (op par défaut).
 #
-# Les textes de /shwc sont dans messages.yml.
+# Les textes des commandes sont dans messages.yml.
 
 # Mondes où les commandes en attente seront exécutées.
 whitelisted-worlds:
