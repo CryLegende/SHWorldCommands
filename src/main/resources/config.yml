@@ -27,7 +27,7 @@
 
 # Mondes où les commandes en attente seront exécutées.
 whitelisted-worlds:
-  - "SuperiorWorld"
+  - "world"
 
 # Notification envoyée au joueur lorsqu'il reçoit une commande dans un monde non autorisé.
 # Vous pouvez laisser n'importe quel champ vide (ex: title: "") pour ne pas l'afficher.
@@ -69,8 +69,8 @@ notification:
 reseau:
   actif: true
   base-de-donnees:
-    url: "jdbc:mariadb://127.0.0.1:3306/bo_net"
-    utilisateur: shworldcommands
+    url: "jdbc:mariadb://127.0.0.1:3306/minecraft"
+    utilisateur: minecraft
     mot-de-passe: CHANGE_ME
     # Délai maximal de connexion et de réponse de la base, en millisecondes
     delai-ms: 3000
